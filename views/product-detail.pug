@@ -1,0 +1,8 @@
+extends layout 
+
+block content 
+    h1= sword.name 
+    p Type: #{sword.swordType}
+    p Ability: #{sword.ability}
+    p Price: $#{sword.price}
+    a(href='/products') Back to all swords
