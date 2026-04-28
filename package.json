@@ -1,7 +1,7 @@
 {
   "name": "csc317termproject",
   "version": "1.0.0",
-  "description": "",
+  "description": "Joshua Arguello & Myles Yolangco",
   "main": "server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",

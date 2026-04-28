@@ -1,0 +1,19 @@
+* {
+    margin: 0px;
+    padding: 0px;
+}
+
+.home-heading {
+    text-align: center;
+}
+
+.home-list {
+    display: flex;
+    justify-content: center;
+}
+
+.nav-button {
+    width: 20vw;
+    height: 5vh;
+    border: 1px black;
+}

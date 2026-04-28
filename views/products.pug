@@ -1,0 +1,15 @@
+doctype html
+html(lang='en')
+  head
+    meta(charset='UTF-8')
+    meta(name='viewport', content='width=device-width, initial-scale=1.0')
+    title Products
+    link(rel='stylesheet', href='/style.css')
+  body
+    main.container
+        a(href="/") Home
+        h1 Products
+        ul.products
+        each sword in swords
+            li.product
+                a(href=`products/${sword.name}`) #{sword.name}
