@@ -64,30 +64,65 @@ function createSword(name, swordType, ability, price) {
 
 function findIndex(identifier) {
   const n = normalizeString(identifier);
-  return swords.findIndex(s => s.name === n);
+  return swords.findIndex(s => normalizeString(s.name) === n);
 }
 
 // Routes
-app.head('/', (req, res) => {
+// HEAD
+app.head('/api/products', (req, res) => {
   res.set('X-Swords-Count', String(swords.length));
   res.sendStatus(200);
 });
 
+// GET
 app.get('/', (req, res) => {
-  res.status(200).json(swords);
+  res.render('home');
 });
 
-app.get('/:name', (req, res) => {
+app.get('/products', (req, res) => {
+  res.render('products', { swords });
+});
+
+app.get('/products/:name', (req, res) => {
   const idx = findIndex(req.params.name);
 
   if (idx === -1) {
-    return res.status(404).json({ error: 'not found' });
+    return res.render('404', { identifier: req.params.name });
   }
 
+  res.render('product-detail', { sword: swords[idx]});
+});
+
+app.get('/login', (req, res) => {
+  res.render('login');
+});
+
+app.get('/profile', (req, res) => {
+  res.render('profile');
+});
+
+app.get('/cart', (req, res) => {
+  res.render('cart');
+});
+
+app.get('/api/products', (req, res) => {
+  res.status(200).json(swords);
+});
+
+app.get('/api/products/:name', (req, res) => {
+  const idx = findIndex(req.params.name);
+  if (idx === -1) {
+    return res.status(404).json({ error: 'not found' });
+  }
   res.status(200).json(swords[idx]);
 });
 
-app.post('/add', (req, res) => {
+// POST
+app.post('/login', (req, res) => {
+  res.redirect('/');
+});
+
+app.post('/api/products/add', (req, res) => {
   const { name, swordType, ability, price } = req.body || {};
 
   const nName = normalizeString(name);
@@ -132,7 +167,8 @@ app.post('/add', (req, res) => {
   return res.status(201).json(newSword);
 });
 
-app.delete('/:name', (req, res) => {
+// DELETE
+app.delete('/api/products/:name', (req, res) => {
   const idx = findIndex(req.params.name);
   
   if (idx === -1) {
