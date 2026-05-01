@@ -1,9 +1,28 @@
 extends layout 
 
 block content 
+  div.shopping-cart
     h1 Shopping Cart
-    p Excalibur x1 - $999.99
-    p TestBlade x2 - $0.00
-    p Honjo Masamune x1 - $499.99
-    p Total: $1499.98
-    a(href='/products') Continue Shopping
+    div.cart-table
+      div.table-heading
+         p Product
+         p Quantity
+         p Subtotal
+      div.table-entry
+        p Excalibur
+        p x1
+        p $999.99
+        button.remove Remove
+      div.table-entry
+        p Test Blade
+        p x2
+        p $0.00
+        button.remove Remove
+      div.table-entry
+        p Jonho Masamune
+        p x1
+        p $499.99
+        button.remove Remove
+    div.total-display
+      p Total: $1499.98
+    a.button(href='/products') Continue Shopping

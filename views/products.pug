@@ -1,8 +1,13 @@
 extends layout 
 
 block content 
-    h1 All Swords 
-    each sword in swords 
-        div 
-            a(href='/products/' + sword.name)= sword.name 
-            |  - $#{sword.price}
+    h1 All Swords
+    div.products-layout
+      each sword in swords 
+        a.product(href='/products/' + sword.name)
+          div.product
+            img(src="https://minecraft.wiki/images/Diamond_Sword_JE3_BE3.png?24296")
+            div.name
+              p #{sword.name}
+            div.price 
+              p $#{sword.price}
