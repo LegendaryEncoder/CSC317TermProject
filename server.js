@@ -117,10 +117,6 @@ app.get('/api/products/:name', (req, res) => {
   res.status(200).json(swords[idx]);
 });
 
-// app.get('*', (req, res) => {
-//   res.render('404');
-// })
-
 // POST
 app.post('/login', (req, res) => {
   res.redirect('/');
@@ -182,6 +178,10 @@ app.delete('/api/products/:name', (req, res) => {
   swords.splice(idx, 1);
 
   return res.sendStatus(204);
+});
+
+app.use((req, res) => {
+  return res.status(404).render("404");
 });
 
 app.listen(PORT, () => {
