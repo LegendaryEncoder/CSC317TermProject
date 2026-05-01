@@ -1,11 +1,7 @@
-doctype html
-html(lang='en')
-  head
-    meta(charset='UTF-8')
-    meta(name='viewport', content='width=device-width, initial-scale=1.0')
-    title Home
-    link(rel='stylesheet', href='/style.css')
-  body
-    h1.home-heading Welcome!
-    div.home-list
-        a.nav-button(href = "/products") Products
+extends layout 
+
+block content 
+    h1 Welcome to the Special Sword Shop 
+    p Browse our collection, take time looking at the ability that each sword grants.
+    a(href='/products') View All Swords
+    

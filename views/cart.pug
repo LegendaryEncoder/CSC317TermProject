@@ -1,8 +1,9 @@
-doctype html
-html(lang='en')
-  head
-    meta(charset='UTF-8')
-    meta(name='viewport', content='width=device-width, initial-scale=1.0')
-    title Home
-    link(rel='stylesheet', href='/style.css')
-  body
+extends layout 
+
+block content 
+    h1 Shopping Cart
+    p Excalibur x1 - $999.99
+    p TestBlade x2 - $0.00
+    p Honjo Masamune x1 - $499.99
+    p Total: $1499.98
+    a(href='/products') Continue Shopping

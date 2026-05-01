@@ -1,9 +1,6 @@
-doctype html
-html(lang='en')
-  head
-    meta(charset='UTF-8')
-    meta(name='viewport', content='width=device-width, initial-scale=1.0')
-    title Home
-    link(rel='stylesheet', href='/style.css')
-  body
-    h1 404 Error
+extends layout 
+
+block content 
+    h1 404 - Not Found 
+    p No Sword found for: #{identifier}
+    a(href='/products') Back to all swords

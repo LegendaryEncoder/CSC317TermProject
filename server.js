@@ -117,6 +117,10 @@ app.get('/api/products/:name', (req, res) => {
   res.status(200).json(swords[idx]);
 });
 
+// app.get('*', (req, res) => {
+//   res.render('404');
+// })
+
 // POST
 app.post('/login', (req, res) => {
   res.redirect('/');
