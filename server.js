@@ -4,6 +4,7 @@
 const express = require('express');
 const path = require('path');
 const app = express();
+const sqlite3 = require("sqlite3").verbose();
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -17,14 +18,76 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const PORT = process.env.PORT || 3000;
 
+
+
 // In-memory state
 /** @type {{name:string, swordType:string, ability:string, price:number}[]} */
+
+/*
 const swords = [
   { name: 'testblade', swordType: 'saber', ability: 'Allows you to test any API.', price: 0.00 },
   { name: 'excalibur', swordType: 'longsword', ability: 'Become King', price: 999.99 },
   { name: 'honjo Masamune', swordType: 'katana', ability: 'idk', price: 499.99 },
   { name: 'sword in the Stone', swordType: '', ability: 'Swing the stone', price: 499.99 }
 ];
+*/
+
+// Swords database:
+const swordsDb = new sqlite3.Database("swords.db", (err) => {
+  if (err) {
+    return console.error(err.message);
+  }
+  console.log("Connected to the swords database.");
+});
+
+// Create the database if it doesn't exist:
+swordsDb.run(`
+  CREATE TABLE IF NOT EXISTS Swords (
+    name TEXT PRIMARY KEY NOT NULL,
+    sword_type TEXT NOT NULL,
+    ability TEXT NOT NULL,
+    price REAL NOT NULL CHECK(price >= 0)
+  )
+`, (err) => {
+  if (err) {
+    return console.error("Error creating table:", err.message);
+  }
+  console.log("Created Swords database");
+});
+
+const insertQuery = `
+  INSERT INTO Swords (name, sword_type, ability, price)
+  VALUES (?, ?, ?, ?)
+`;
+
+// Insert swords into the database:
+if (true) {
+
+  swordsDb.run(insertQuery, ["testblade", "saber", "Allows you to test any API.", 0.00], function(err) {
+    if (err) {
+      return console.error("Error inserting sword:", err.message);
+    }
+  });
+
+  swordsDb.run(insertQuery, ["excalibur", "longsword", "Become King", 999.99], function(err) {
+    if (err) {
+      return console.error("Error inserting sword:", err.message);
+    }
+  });
+
+  swordsDb.run(insertQuery, ["honjo masamune", "katana", "idk", 499.99], function(err) {
+    if (err) {
+      return console.error("Error inserting sword:", err.message);
+    }
+  });
+
+  swordsDb.run(insertQuery, ["sword in the stone", "longsword", "Swing the stone", 499.99], function(err) {
+    if (err) {
+      return console.error("Error inserting sword:", err.message);
+    }
+  });
+
+}
 
 // Helpers
 
@@ -80,17 +143,25 @@ app.get('/', (req, res) => {
 });
 
 app.get('/products', (req, res) => {
-  res.render('products', { swords });
+  swordsDb.all("SELECT * FROM Swords", (err, swords) => {
+    if (err) {
+      return console.error("Error fetching swords:", err.message);
+    }
+    res.render('products', { swords });
+  });
 });
 
 app.get('/products/:name', (req, res) => {
-  const idx = findIndex(req.params.name);
-
-  if (idx === -1) {
-    return res.render('404', { identifier: req.params.name });
-  }
-
-  res.render('product-detail', { sword: swords[idx]});
+  swordsDb.all("SELECT * FROM Swords WHERE name = ?", [req.params.name], (err, swords) => {
+    if (err) {
+      return console.error("Error fetching swords:", err.message);
+    }
+    if (swords.length <= 0) {
+      return res.render('404', { identifier: req.params.name });
+    } else {
+      res.render('product-detail', { sword: swords[0]});
+    }
+  });
 });
 
 app.get('/login', (req, res) => {
@@ -106,15 +177,35 @@ app.get('/cart', (req, res) => {
 });
 
 app.get('/api/products', (req, res) => {
-  res.status(200).json(swords);
+  // res.status(200).json(swords);
+
+  swordsDb.all("SELECT * FROM Swords", (err, swords) => {
+    if (err) {
+      return console.error("Error fetching swords:", err.message);
+    }
+    res.status(200).json(swords);
+  });
 });
 
 app.get('/api/products/:name', (req, res) => {
+  /*
   const idx = findIndex(req.params.name);
   if (idx === -1) {
     return res.status(404).json({ error: 'not found' });
   }
   res.status(200).json(swords[idx]);
+  */
+
+  swordsDb.all("SELECT * FROM Swords WHERE name = ?", [req.params.name], (err, swords) => {
+    if (err) {
+      return console.error("Error fetching swords:", err.message);
+    }
+    if (swords.length <= 0) {
+      return res.status(404).json({ error: 'not found' });
+    } else {
+      res.status(200).json(swords[0]);
+    }
+  });
 });
 
 // POST
@@ -162,20 +253,35 @@ app.post('/api/products/add', (req, res) => {
     return res.status(409).json({ error: 'sword already exists' });
   }
 
+  swordsDb.run(insertQuery, [nName, swordType, ability, price], function(err) {
+    if (err) {
+      return console.error("Error adding sword:", err.message);
+    }
+  });
+
   const newSword = createSword(nName, swordType, ability, price)
-  swords.push(newSword);
+  // swords.push(newSword);
   return res.status(201).json(newSword);
 });
 
 // DELETE
 app.delete('/api/products/:name', (req, res) => {
-  const idx = findIndex(req.params.name);
+  /*const idx = findIndex(req.params.name);
   
   if (idx === -1) {
     return res.status(404).json({ error: 'not found' });
   }
 
-  swords.splice(idx, 1);
+  swords.splice(idx, 1);*/
+
+  swordsDb.all("DELETE FROM Swords WHERE name = ?", [req.params.name], (err, swords) => {
+    if (err) {
+      return console.error("Error deleting swords:", err.message);
+    }
+    if (swords.length <= 0) {
+      return res.status(404).json({ error: 'not found' });
+    }
+  });
 
   return res.sendStatus(204);
 });
