@@ -1,295 +1,359 @@
-
-
 'use strict';
 const express = require('express');
-const path = require('path');
-const app = express();
-const sqlite3 = require("sqlite3").verbose();
+const path    = require('path');
+const fs      = require('fs');
+const initSqlJs = require('sql.js');
+const bcrypt  = require('bcryptjs');
+const session = require('express-session');
 
+const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-// Pug configuration
 app.set('view engine', 'pug');
 app.set('views', path.join(__dirname, 'views'));
-
-// Serve static files (CSS)
 app.use(express.static(path.join(__dirname, 'public')));
+app.use(session({
+  secret: 'sword-shop-secret-key',
+  resave: false,
+  saveUninitialized: false,
+  cookie: { maxAge: 1000 * 60 * 60 * 24 } // 1 day
+}));
 
-const PORT = process.env.PORT || 3000;
+const PORT    = process.env.PORT || 3000;
+const DB_PATH = path.join(__dirname, 'swords.db');
 
-
-
-// In-memory state
-/** @type {{name:string, swordType:string, ability:string, price:number}[]} */
-
-/*
-const swords = [
-  { name: 'testblade', swordType: 'saber', ability: 'Allows you to test any API.', price: 0.00 },
-  { name: 'excalibur', swordType: 'longsword', ability: 'Become King', price: 999.99 },
-  { name: 'honjo Masamune', swordType: 'katana', ability: 'idk', price: 499.99 },
-  { name: 'sword in the Stone', swordType: '', ability: 'Swing the stone', price: 499.99 }
-];
-*/
-
-// Swords database:
-const swordsDb = new sqlite3.Database("swords.db", (err) => {
-  if (err) {
-    return console.error(err.message);
-  }
-  console.log("Connected to the swords database.");
+// ── Middleware: expose session user to all templates ──────────────────────────
+app.use((req, res, next) => {
+  res.locals.user = req.session.user || null;
+  next();
 });
 
-// Create the database if it doesn't exist:
-swordsDb.run(`
-  CREATE TABLE IF NOT EXISTS Swords (
-    name TEXT PRIMARY KEY NOT NULL,
+// ── Auth guards ───────────────────────────────────────────────────────────────
+function requireLogin(req, res, next) {
+  if (!req.session.user) return res.redirect('/login?next=' + encodeURIComponent(req.path));
+  next();
+}
+function requireAdmin(req, res, next) {
+  if (!req.session.user || !req.session.user.is_admin) return res.status(403).render('404', { identifier: 'Admin access required' });
+  next();
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function normalizeString(v) { return String(v || '').toLowerCase().trim(); }
+function isValidPrice(v)    { const n = Number(v); return isFinite(n) && n >= 0; }
+
+function rowsToObjects(result) {
+  if (!result || result.length === 0) return [];
+  const { columns, values } = result[0];
+  return values.map(row => Object.fromEntries(columns.map((c, i) => [c, row[i]])));
+}
+
+let db;
+function saveDb() { fs.writeFileSync(DB_PATH, Buffer.from(db.export())); }
+
+// ── Bootstrap ─────────────────────────────────────────────────────────────────
+initSqlJs().then(SQL => {
+  db = fs.existsSync(DB_PATH)
+    ? new SQL.Database(fs.readFileSync(DB_PATH))
+    : new SQL.Database();
+
+  // Migrate: add image_url if upgrading from older DB without it
+  try { db.run('ALTER TABLE Swords ADD COLUMN image_url TEXT'); saveDb(); } catch(e) { /* column already exists */ }
+
+  db.run(`CREATE TABLE IF NOT EXISTS Swords (
+    name       TEXT PRIMARY KEY NOT NULL,
     sword_type TEXT NOT NULL,
-    ability TEXT NOT NULL,
-    price REAL NOT NULL CHECK(price >= 0)
-  )
-`, (err) => {
-  if (err) {
-    return console.error("Error creating table:", err.message);
-  }
-  console.log("Created Swords database");
-});
+    ability    TEXT NOT NULL,
+    price      REAL NOT NULL CHECK(price >= 0),
+    image_url  TEXT
+  )`);
 
-const insertQuery = `
-  INSERT INTO Swords (name, sword_type, ability, price)
-  VALUES (?, ?, ?, ?)
-`;
+  db.run(`CREATE TABLE IF NOT EXISTS Users (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    username   TEXT UNIQUE NOT NULL,
+    first_name TEXT NOT NULL,
+    last_name  TEXT NOT NULL,
+    phone      TEXT NOT NULL,
+    email      TEXT UNIQUE NOT NULL,
+    password   TEXT NOT NULL,
+    is_admin   INTEGER NOT NULL DEFAULT 0
+  )`);
 
-// Insert swords into the database:
-if (true) {
+  db.run(`CREATE TABLE IF NOT EXISTS CartItems (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL,
+    sword_name  TEXT NOT NULL,
+    quantity    INTEGER NOT NULL DEFAULT 1 CHECK(quantity >= 1),
+    FOREIGN KEY(user_id)    REFERENCES Users(id)  ON DELETE CASCADE,
+    FOREIGN KEY(sword_name) REFERENCES Swords(name) ON DELETE CASCADE,
+    UNIQUE(user_id, sword_name)
+  )`);
 
-  swordsDb.run(insertQuery, ["testblade", "saber", "Allows you to test any API.", 0.00], function(err) {
-    if (err) {
-      return console.error("Error inserting sword:", err.message);
-    }
-  });
+  // Seed swords
+  const swordStmt = db.prepare('INSERT OR IGNORE INTO Swords (name, sword_type, ability, price, image_url) VALUES (?,?,?,?,?)');
+  [
+    ['testblade',          'saber',     'Allows you to test any API.', 0.00,   null],
+    ['excalibur',          'longsword', 'Become King',                 999.99, null],
+    ['honjo masamune',     'katana',    'idk',                         499.99, null],
+    ['sword in the stone', 'longsword', 'Swing the stone',             499.99, null],
+  ].forEach(s => swordStmt.run(s));
+  swordStmt.free();
 
-  swordsDb.run(insertQuery, ["excalibur", "longsword", "Become King", 999.99], function(err) {
-    if (err) {
-      return console.error("Error inserting sword:", err.message);
-    }
-  });
+  // Seed admin account (admin / admin123)
+  const adminHash = bcrypt.hashSync('admin123', 10);
+  db.run(`INSERT OR IGNORE INTO Users (username, first_name, last_name, phone, email, password, is_admin)
+          VALUES ('admin','Admin','User','0000000000','admin@swordshop.com',?,1)`, [adminHash]);
 
-  swordsDb.run(insertQuery, ["honjo masamune", "katana", "idk", 499.99], function(err) {
-    if (err) {
-      return console.error("Error inserting sword:", err.message);
-    }
-  });
+  saveDb();
+  console.log('DB ready');
 
-  swordsDb.run(insertQuery, ["sword in the stone", "longsword", "Swing the stone", 499.99], function(err) {
-    if (err) {
-      return console.error("Error inserting sword:", err.message);
-    }
-  });
+  app.listen(PORT, () => console.log('Listening on http://localhost:' + PORT));
+}).catch(e => { console.error(e); process.exit(1); });
 
-}
+// ═════════════════════════════════════════════════════════════════════════════
+// PAGE ROUTES
+// ═════════════════════════════════════════════════════════════════════════════
 
-// Helpers
+app.get('/', (req, res) => res.render('home'));
 
-function normalizeString(value) {
-  return String(value || '').toLowerCase().trim();
-}
-
-function isValidSwordType(value) {
-    return typeof(value) == "string";
-}
-
-function isValidAbility(value) {
-    return typeof(value) == "string";
-}
-
-function isValidPrice(value) {
-  return typeof value === 'number' && isFinite(value) && value >= 0;
-}
-
-function isValidSword(name, swordType, ability, price) {
-  return (
-    normalizeString(name) !== '' &&
-    isValidSwordType(swordType) &&
-    isValidAbility(ability) &&
-    isValidPrice(price)
-  );
-}
-
-function createSword(name, swordType, ability, price) {
-    return {
-        name: name,
-        swordType: swordType,
-        ability: ability,
-        price: price
-    }
-}
-
-function findIndex(identifier) {
-  const n = normalizeString(identifier);
-  return swords.findIndex(s => normalizeString(s.name) === n);
-}
-
-// Routes
-// HEAD
-app.head('/api/products', (req, res) => {
-  res.set('X-Swords-Count', String(swords.length));
-  res.sendStatus(200);
-});
-
-// GET
-app.get('/', (req, res) => {
-  res.render('home');
-});
-
+// ── Products ──────────────────────────────────────────────────────────────────
 app.get('/products', (req, res) => {
-  swordsDb.all("SELECT * FROM Swords", (err, swords) => {
-    if (err) {
-      return console.error("Error fetching swords:", err.message);
-    }
-    res.render('products', { swords });
-  });
+  const swords = rowsToObjects(db.exec('SELECT * FROM Swords'));
+  res.render('products', { swords });
 });
 
 app.get('/products/:name', (req, res) => {
-  swordsDb.all("SELECT * FROM Swords WHERE name = ?", [req.params.name], (err, swords) => {
-    if (err) {
-      return console.error("Error fetching swords:", err.message);
-    }
-    if (swords.length <= 0) {
-      return res.render('404', { identifier: req.params.name });
-    } else {
-      res.render('product-detail', { sword: swords[0]});
-    }
-  });
+  const stmt = db.prepare('SELECT * FROM Swords WHERE name = ?');
+  stmt.bind([req.params.name]);
+  const rows = [];
+  while (stmt.step()) rows.push(stmt.getAsObject());
+  stmt.free();
+  if (!rows[0]) return res.status(404).render('404', { identifier: req.params.name });
+  res.render('product-detail', { sword: rows[0] });
 });
 
+// ── Auth ──────────────────────────────────────────────────────────────────────
 app.get('/login', (req, res) => {
-  res.render('login');
+  if (req.session.user) return res.redirect('/');
+  res.render('login', { next: req.query.next || '/', error: null, signupError: null });
 });
 
-app.get('/profile', (req, res) => {
-  res.render('profile');
-});
-
-app.get('/cart', (req, res) => {
-  res.render('cart');
-});
-
-app.get('/api/products', (req, res) => {
-  // res.status(200).json(swords);
-
-  swordsDb.all("SELECT * FROM Swords", (err, swords) => {
-    if (err) {
-      return console.error("Error fetching swords:", err.message);
-    }
-    res.status(200).json(swords);
-  });
-});
-
-app.get('/api/products/:name', (req, res) => {
-  /*
-  const idx = findIndex(req.params.name);
-  if (idx === -1) {
-    return res.status(404).json({ error: 'not found' });
-  }
-  res.status(200).json(swords[idx]);
-  */
-
-  swordsDb.all("SELECT * FROM Swords WHERE name = ?", [req.params.name], (err, swords) => {
-    if (err) {
-      return console.error("Error fetching swords:", err.message);
-    }
-    if (swords.length <= 0) {
-      return res.status(404).json({ error: 'not found' });
-    } else {
-      res.status(200).json(swords[0]);
-    }
-  });
-});
-
-// POST
 app.post('/login', (req, res) => {
+  const { username, password } = req.body;
+  const stmt = db.prepare('SELECT * FROM Users WHERE username = ?');
+  stmt.bind([username]);
+  let user = null;
+  if (stmt.step()) user = stmt.getAsObject();
+  stmt.free();
+
+  if (!user || !bcrypt.compareSync(password, user.password)) {
+    return res.render('login', { next: req.body.next || '/', error: 'Invalid username or password.', signupError: null });
+  }
+  req.session.user = { id: user.id, username: user.username, first_name: user.first_name, is_admin: !!user.is_admin };
+  res.redirect(req.body.next || '/');
+});
+
+app.post('/signup', (req, res) => {
+  const { username, first_name, last_name, phone, email, password, confirm_password } = req.body;
+
+  if (!username || !first_name || !last_name || !phone || !email || !password) {
+    return res.render('login', { next: '/', error: null, signupError: 'All fields are required.' });
+  }
+  if (password !== confirm_password) {
+    return res.render('login', { next: '/', error: null, signupError: 'Passwords do not match.' });
+  }
+  if (password.length < 6) {
+    return res.render('login', { next: '/', error: null, signupError: 'Password must be at least 6 characters.' });
+  }
+
+  const hash = bcrypt.hashSync(password, 10);
+  try {
+    db.run(
+      'INSERT INTO Users (username, first_name, last_name, phone, email, password) VALUES (?,?,?,?,?,?)',
+      [username.trim(), first_name.trim(), last_name.trim(), phone.trim(), email.trim(), hash]
+    );
+    saveDb();
+    // Log them in immediately
+    const stmt = db.prepare('SELECT * FROM Users WHERE username = ?');
+    stmt.bind([username.trim()]);
+    let newUser = null;
+    if (stmt.step()) newUser = stmt.getAsObject();
+    stmt.free();
+    req.session.user = { id: newUser.id, username: newUser.username, first_name: newUser.first_name, is_admin: false };
+    res.redirect('/');
+  } catch (err) {
+    const msg = err.message.includes('UNIQUE') ? 'Username or email already taken.' : err.message;
+    res.render('login', { next: '/', error: null, signupError: msg });
+  }
+});
+
+app.post('/logout', (req, res) => {
+  req.session.destroy();
   res.redirect('/');
 });
 
-app.post('/api/products/add', (req, res) => {
-  const { name, swordType, ability, price } = req.body || {};
+// ── Profile ───────────────────────────────────────────────────────────────────
+app.get('/profile', requireLogin, (req, res) => {
+  const stmt = db.prepare('SELECT id,username,first_name,last_name,phone,email FROM Users WHERE id = ?');
+  stmt.bind([req.session.user.id]);
+  let profile = null;
+  if (stmt.step()) profile = stmt.getAsObject();
+  stmt.free();
+  res.render('profile', { profile });
+});
 
+// ── Cart ──────────────────────────────────────────────────────────────────────
+app.get('/cart', requireLogin, (req, res) => {
+  const items = rowsToObjects(db.exec(
+    `SELECT ci.id, ci.sword_name, ci.quantity, s.price, s.image_url,
+            ROUND(ci.quantity * s.price, 2) as subtotal
+     FROM CartItems ci
+     JOIN Swords s ON s.name = ci.sword_name
+     WHERE ci.user_id = ${req.session.user.id}
+     ORDER BY ci.id`
+  ));
+  const total = items.reduce((sum, i) => sum + i.subtotal, 0).toFixed(2);
+  res.render('cart', { items, total });
+});
+
+// ── Admin ─────────────────────────────────────────────────────────────────────
+app.get('/admin', requireAdmin, (req, res) => {
+  const users  = rowsToObjects(db.exec('SELECT id,username,first_name,last_name,email,phone,is_admin FROM Users ORDER BY id'));
+  const swords = rowsToObjects(db.exec('SELECT * FROM Swords ORDER BY name'));
+  res.render('admin', { users, swords });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// API ROUTES
+// ═════════════════════════════════════════════════════════════════════════════
+
+// ── Swords API ────────────────────────────────────────────────────────────────
+app.head('/api/products', (req, res) => {
+  const r = db.exec('SELECT COUNT(*) as count FROM Swords');
+  res.set('X-Swords-Count', String(r[0].values[0][0]));
+  res.sendStatus(200);
+});
+
+app.get('/api/products', (req, res) => {
+  res.json(rowsToObjects(db.exec('SELECT * FROM Swords')));
+});
+
+app.get('/api/products/:name', (req, res) => {
+  const stmt = db.prepare('SELECT * FROM Swords WHERE name = ?');
+  stmt.bind([req.params.name]);
+  const rows = [];
+  while (stmt.step()) rows.push(stmt.getAsObject());
+  stmt.free();
+  if (!rows[0]) return res.status(404).json({ error: 'not found' });
+  res.json(rows[0]);
+});
+
+app.post('/api/products/add', requireAdmin, (req, res) => {
+  const { name, swordType, ability, price, image_url } = req.body || {};
   const nName = normalizeString(name);
-  if (!nName) {
-    return res.status(400).json({ error: "name is required" });
+  if (!nName)    return res.status(400).json({ error: 'name is required' });
+  if (!swordType) return res.status(400).json({ error: 'swordType is required' });
+  if (!ability)  return res.status(400).json({ error: 'ability is required' });
+  if (!isValidPrice(price)) return res.status(400).json({ error: 'invalid price' });
+  try {
+    db.run('INSERT INTO Swords (name, sword_type, ability, price, image_url) VALUES (?,?,?,?,?)',
+      [nName, swordType, ability, Number(price), image_url || null]);
+    saveDb();
+    res.status(201).json({ name: nName, sword_type: swordType, ability, price: Number(price), image_url: image_url || null });
+  } catch (err) {
+    res.status(err.message.includes('UNIQUE') ? 409 : 500).json({ error: err.message });
   }
-
-  if (nName == "") {
-    return res.status(400).json({ error: "name is invalid" });
-  }
-
-  if (!swordType) {
-    return res.status(400).json({ error: "swordType is required" });
-  }
-
-  if (!isValidSwordType(swordType)) {
-    return res.status(400).json({ error: "swordType must be a string" });
-  }
-
-  if (!ability) {
-    return res.status(400).json({ error: "ability is required" });
-  }
-
-  if (!isValidAbility(ability)) {
-    return res.status(400).json({ error: "ability must be a string" });
-  }
-
-  if (!price) {
-    return res.status(400).json({ error: "price is required" });
-  }
-
-  if (!isValidPrice(price)) {
-    return res.status(400).json({ error: "price must be a finite number greater than or equal to 0" });
-  }
-
-  if (findIndex(nName) !== -1) {
-    return res.status(409).json({ error: 'sword already exists' });
-  }
-
-  swordsDb.run(insertQuery, [nName, swordType, ability, price], function(err) {
-    if (err) {
-      return console.error("Error adding sword:", err.message);
-    }
-  });
-
-  const newSword = createSword(nName, swordType, ability, price)
-  // swords.push(newSword);
-  return res.status(201).json(newSword);
 });
 
-// DELETE
-app.delete('/api/products/:name', (req, res) => {
-  /*const idx = findIndex(req.params.name);
-  
-  if (idx === -1) {
-    return res.status(404).json({ error: 'not found' });
+app.put('/api/products/:name', requireAdmin, (req, res) => {
+  const { sword_type, ability, price, image_url, new_name } = req.body || {};
+  const stmt = db.prepare('SELECT * FROM Swords WHERE name = ?');
+  stmt.bind([req.params.name]);
+  const rows = [];
+  while (stmt.step()) rows.push(stmt.getAsObject());
+  stmt.free();
+  if (!rows[0]) return res.status(404).json({ error: 'not found' });
+
+  const s = rows[0];
+  const updatedName     = new_name     ? normalizeString(new_name) : s.name;
+  const updatedType     = sword_type   || s.sword_type;
+  const updatedAbility  = ability      || s.ability;
+  const updatedPrice    = price !== undefined ? Number(price) : s.price;
+  const updatedImage    = image_url !== undefined ? (image_url || null) : s.image_url;
+
+  try {
+    db.run('UPDATE Swords SET name=?, sword_type=?, ability=?, price=?, image_url=? WHERE name=?',
+      [updatedName, updatedType, updatedAbility, updatedPrice, updatedImage, req.params.name]);
+    saveDb();
+    res.json({ name: updatedName, sword_type: updatedType, ability: updatedAbility, price: updatedPrice, image_url: updatedImage });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
-
-  swords.splice(idx, 1);*/
-
-  swordsDb.all("DELETE FROM Swords WHERE name = ?", [req.params.name], (err, swords) => {
-    if (err) {
-      return console.error("Error deleting swords:", err.message);
-    }
-    if (swords.length <= 0) {
-      return res.status(404).json({ error: 'not found' });
-    }
-  });
-
-  return res.sendStatus(204);
 });
 
-app.use((req, res) => {
-  return res.status(404).render("404");
+app.delete('/api/products/:name', requireAdmin, (req, res) => {
+  const r = db.exec(`SELECT COUNT(*) FROM Swords WHERE name = '${req.params.name.replace(/'/g,"''")}'`);
+  if (r[0].values[0][0] === 0) return res.status(404).json({ error: 'not found' });
+  db.run('DELETE FROM Swords WHERE name = ?', [req.params.name]);
+  saveDb();
+  res.sendStatus(204);
 });
 
-app.listen(PORT, () => {
-  console.log(`Swords API listening on http://localhost:${PORT}`);
+// ── Cart API ──────────────────────────────────────────────────────────────────
+app.post('/api/cart/add', requireLogin, (req, res) => {
+  const { sword_name } = req.body;
+  if (!sword_name) return res.status(400).json({ error: 'sword_name required' });
+
+  // Check sword exists
+  const sw = db.exec(`SELECT name, price FROM Swords WHERE name = ?`, [sword_name]);
+  if (!sw.length) return res.status(404).json({ error: 'sword not found' });
+
+  try {
+    db.run(`INSERT INTO CartItems (user_id, sword_name, quantity) VALUES (?,?,1)
+            ON CONFLICT(user_id, sword_name) DO UPDATE SET quantity = quantity + 1`,
+      [req.session.user.id, sword_name]);
+    saveDb();
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
+
+app.put('/api/cart/:id', requireLogin, (req, res) => {
+  const { quantity } = req.body;
+  const qty = parseInt(quantity);
+  if (!Number.isInteger(qty) || qty < 1) return res.status(400).json({ error: 'quantity must be >= 1' });
+
+  // Ensure item belongs to this user
+  const check = db.exec(`SELECT id FROM CartItems WHERE id = ${parseInt(req.params.id)} AND user_id = ${req.session.user.id}`);
+  if (!check.length || !check[0].values.length) return res.status(404).json({ error: 'not found' });
+
+  db.run('UPDATE CartItems SET quantity = ? WHERE id = ?', [qty, parseInt(req.params.id)]);
+  saveDb();
+
+  // Return updated subtotal
+  const item = rowsToObjects(db.exec(
+    `SELECT ci.quantity, s.price, ROUND(ci.quantity * s.price, 2) as subtotal
+     FROM CartItems ci JOIN Swords s ON s.name = ci.sword_name WHERE ci.id = ${parseInt(req.params.id)}`
+  ))[0];
+  res.json(item);
+});
+
+app.delete('/api/cart/:id', requireLogin, (req, res) => {
+  const check = db.exec(`SELECT id FROM CartItems WHERE id = ${parseInt(req.params.id)} AND user_id = ${req.session.user.id}`);
+  if (!check.length || !check[0].values.length) return res.status(404).json({ error: 'not found' });
+  db.run('DELETE FROM CartItems WHERE id = ?', [parseInt(req.params.id)]);
+  saveDb();
+  res.sendStatus(204);
+});
+
+// ── Admin user API ────────────────────────────────────────────────────────────
+app.delete('/api/admin/users/:id', requireAdmin, (req, res) => {
+  const uid = parseInt(req.params.id);
+  if (uid === req.session.user.id) return res.status(400).json({ error: 'Cannot delete yourself' });
+  db.run('DELETE FROM Users WHERE id = ?', [uid]);
+  saveDb();
+  res.sendStatus(204);
+});
+
+app.use((req, res) => res.status(404).render('404', { identifier: req.path }));

@@ -1,0 +1,155 @@
+extends layout
+
+block content
+  div.admin-page
+    h1 Admin Panel
+
+    section.admin-section
+      h2 Swords
+      button.admin-add-btn(onclick='toggleAddSword()') + Add New Sword
+
+      div#add-sword-form.admin-form(style='display:none')
+        h3 Add Sword
+        div.field-row
+          div.field-group
+            label Name
+            input#sw-name(type='text', placeholder='e.g. sting')
+          div.field-group
+            label Type
+            input#sw-type(type='text', placeholder='e.g. shortsword')
+        div.field-row
+          div.field-group
+            label Ability
+            input#sw-ability(type='text', placeholder='Glows near orcs')
+          div.field-group
+            label Price ($)
+            input#sw-price(type='number', min='0', step='0.01', placeholder='0.00')
+        div.field-group
+          label Image URL (optional)
+          input#sw-image(type='url', placeholder='https://...')
+        div.form-actions
+          button(onclick='submitAddSword()') Add Sword
+          button.cancel-btn(onclick='toggleAddSword()') Cancel
+        p#sword-add-msg.form-msg
+
+      div.admin-table
+        div.admin-table-head
+          span Name
+          span Type
+          span Ability
+          span Price
+          span Image URL
+          span Actions
+        each sword in swords
+          div.admin-table-row(id='sword-row-' + sword.name.replace(/ /g, '-'))
+            span.editable= sword.name
+            span.editable= sword.sword_type
+            span.editable= sword.ability
+            span.editable= '$' + sword.price.toFixed(2)
+            span.editable= sword.image_url || '—'
+            div.row-actions
+              button.edit-btn(onclick='editSword(this, "' + sword.name + '")') Edit
+              button.delete-btn(onclick='deleteSword("' + sword.name + '")') ✕
+
+    section.admin-section
+      h2 Users
+      div.admin-table
+        div.admin-table-head
+          span ID
+          span Username
+          span Name
+          span Email
+          span Phone
+          span Admin
+          span Actions
+        each u in users
+          div.admin-table-row(id='user-row-' + u.id)
+            span= u.id
+            span= u.username
+            span= u.first_name + ' ' + u.last_name
+            span= u.email
+            span= u.phone
+            span= u.is_admin ? '✓' : ''
+            div.row-actions
+              if !u.is_admin
+                button.delete-btn(onclick='deleteUser(' + u.id + ')') ✕
+
+  script.
+    function toggleAddSword() {
+      const f = document.getElementById('add-sword-form');
+      f.style.display = f.style.display === 'none' ? 'block' : 'none';
+    }
+
+    async function submitAddSword() {
+      const msg = document.getElementById('sword-add-msg');
+      const body = {
+        name:      document.getElementById('sw-name').value.trim(),
+        swordType: document.getElementById('sw-type').value.trim(),
+        ability:   document.getElementById('sw-ability').value.trim(),
+        price:     parseFloat(document.getElementById('sw-price').value),
+        image_url: document.getElementById('sw-image').value.trim()
+      };
+      const res = await fetch('/api/products/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        msg.style.color = 'green';
+        msg.textContent = 'Sword added! Reload to see it in the table.';
+      } else {
+        msg.style.color = 'red';
+        msg.textContent = data.error;
+      }
+    }
+
+    async function deleteSword(name) {
+      if (!confirm('Delete sword "' + name + '"?')) return;
+      const res = await fetch('/api/products/' + encodeURIComponent(name), { method: 'DELETE' });
+      if (res.ok) {
+        document.getElementById('sword-row-' + name.replace(/ /g, '-'))?.remove();
+      } else {
+        alert('Failed to delete sword.');
+      }
+    }
+
+    function editSword(btn, originalName) {
+      const row = btn.closest('.admin-table-row');
+      const cells = row.querySelectorAll('.editable');
+      const [nameCell, typeCell, abilityCell, priceCell, imageCell] = cells;
+      nameCell.innerHTML    = '<input value="' + nameCell.textContent + '">';
+      typeCell.innerHTML    = '<input value="' + typeCell.textContent + '">';
+      abilityCell.innerHTML = '<input value="' + abilityCell.textContent + '">';
+      priceCell.innerHTML   = '<input type="number" step="0.01" value="' + priceCell.textContent.replace('$','') + '">';
+      imageCell.innerHTML   = '<input value="' + (imageCell.textContent === '—' ? '' : imageCell.textContent) + '">';
+      btn.textContent = 'Save';
+      btn.onclick = () => saveSword(btn, originalName);
+    }
+
+    async function saveSword(btn, originalName) {
+      const row = btn.closest('.admin-table-row');
+      const inputs = [...row.querySelectorAll('.editable input')];
+      const [new_name, sword_type, ability, price, image_url] = inputs.map(i => i.value.trim());
+      const res = await fetch('/api/products/' + encodeURIComponent(originalName), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ new_name, sword_type, ability, price: parseFloat(price), image_url })
+      });
+      if (res.ok) {
+        location.reload();
+      } else {
+        const d = await res.json();
+        alert('Error: ' + d.error);
+      }
+    }
+
+    async function deleteUser(id) {
+      if (!confirm('Delete this user and their cart?')) return;
+      const res = await fetch('/api/admin/users/' + id, { method: 'DELETE' });
+      if (res.ok) {
+        document.getElementById('user-row-' + id)?.remove();
+      } else {
+        alert('Failed to delete user.');
+      }
+    }

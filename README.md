@@ -2,6 +2,11 @@
 ## Group Members
 Joshua Arguello & Myles Yolangco
 
+# First User
+UserName: Flash
+Password: 123456
+
+
 ## Pug-Templates-HW
 ### GET
 #### GET ALL Swords

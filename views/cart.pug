@@ -1,28 +1,76 @@
-extends layout 
+extends layout
 
-block content 
+block content
   div.shopping-cart
     h1 Shopping Cart
-    div.cart-table
-      div.table-heading
-         p Product
-         p Quantity
-         p Subtotal
-      div.table-entry
-        p Excalibur
-        p x1
-        p $999.99
-        button.remove Remove
-      div.table-entry
-        p Test Blade
-        p x2
-        p $0.00
-        button.remove Remove
-      div.table-entry
-        p Jonho Masamune
-        p x1
-        p $499.99
-        button.remove Remove
-    div.total-display
-      p Total: $1499.98
-    a.button(href='/products') Continue Shopping
+    if items.length === 0
+      p.empty-cart Your cart is empty.
+      a.button(href='/products') Browse Swords
+    else
+      div.cart-table
+        div.table-heading
+          p Product
+          p Quantity
+          p Subtotal
+          p
+        each item in items
+          div.table-entry(id='row-' + item.id)
+            p= item.sword_name
+            div.qty-control
+              button.qty-btn(onclick='changeQty(' + item.id + ', -1)') −
+              input.qty-input(
+                type='number',
+                min='1',
+                value=item.quantity,
+                id='qty-' + item.id,
+                onchange='setQty(' + item.id + ', this.value)'
+              )
+              button.qty-btn(onclick='changeQty(' + item.id + ', 1)') +
+            p.subtotal(id='sub-' + item.id) $#{item.subtotal.toFixed(2)}
+            button.remove-btn(onclick='removeItem(' + item.id + ')', title='Remove item') ✕
+      div.total-display
+        p Grand Total: $
+          span#grand-total= total
+      a.button(href='/products') Continue Shopping
+
+  script.
+    async function changeQty(id, delta) {
+      const input = document.getElementById('qty-' + id);
+      const newQty = Math.max(1, parseInt(input.value) + delta);
+      input.value = newQty;
+      await setQty(id, newQty);
+    }
+
+    async function setQty(id, qty) {
+      qty = Math.max(1, parseInt(qty));
+      const res = await fetch('/api/cart/' + id, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quantity: qty })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        document.getElementById('qty-' + id).value = data.quantity;
+        document.getElementById('sub-' + id).textContent = '$' + data.subtotal.toFixed(2);
+        recalcTotal();
+      }
+    }
+
+    async function removeItem(id) {
+      const res = await fetch('/api/cart/' + id, { method: 'DELETE' });
+      if (res.ok) {
+        document.getElementById('row-' + id).remove();
+        recalcTotal();
+        if (document.querySelectorAll('.table-entry').length === 0) {
+          location.reload();
+        }
+      }
+    }
+
+    function recalcTotal() {
+      let total = 0;
+      document.querySelectorAll('.subtotal').forEach(el => {
+        total += parseFloat(el.textContent.replace('$', '')) || 0;
+      });
+      document.getElementById('grand-total').textContent = total.toFixed(2);
+    }

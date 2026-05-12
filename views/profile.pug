@@ -1,8 +1,19 @@
-extends layout 
+extends layout
 
-block content 
-    h1 User Profile 
-    p Name: Joe Doe 
-    p Email: johndoe@email.com
-    p Member Since: April 2026
-    
+block content
+  div.profile-page
+    h1 User Profile
+    div.profile-card
+      div.profile-field
+        span.label Username
+        span= profile.username
+      div.profile-field
+        span.label Name
+        span= profile.first_name + ' ' + profile.last_name
+      div.profile-field
+        span.label Email
+        span= profile.email
+      div.profile-field
+        span.label Phone
+        span= profile.phone
+    a.button(href='/cart') View My Cart

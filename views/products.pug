@@ -1,13 +1,42 @@
-extends layout 
+extends layout
 
-block content 
-    h1 All Swords
-    div.products-layout
-      each sword in swords 
+block content
+  h1 All Swords
+  div.products-layout
+    each sword in swords
+      div.product-card
         a.product(href='/products/' + sword.name)
           div.product
-            img(src="https://minecraft.wiki/images/Diamond_Sword_JE3_BE3.png?24296")
+            img(src=sword.image_url || 'https://minecraft.wiki/images/Diamond_Sword_JE3_BE3.png?24296', alt=sword.name)
             div.name
               p #{sword.name}
-            div.price 
-              p $#{sword.price}
+            div.price
+              p $#{sword.price.toFixed(2)}
+        if user
+          button.add-to-cart(data-sword=sword.name) + Add to Cart
+        else
+          a.add-to-cart-login(href='/login?next=/products') Login to add to cart
+
+  script.
+    document.querySelectorAll('.add-to-cart').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        const res = await fetch('/api/cart/add', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sword_name: btn.dataset.sword })
+        });
+        if (res.ok) {
+          btn.textContent = '✓ Added!';
+          btn.classList.add('added');
+          setTimeout(() => {
+            btn.textContent = '+ Add to Cart';
+            btn.classList.remove('added');
+            btn.disabled = false;
+          }, 1500);
+        } else {
+          btn.textContent = 'Error';
+          btn.disabled = false;
+        }
+      });
+    });
