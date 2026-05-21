@@ -2,6 +2,7 @@ html
   head
     title Special Sword Shop
     link(rel='stylesheet', href='/css/style.css')
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
   body
     nav
       a(href='/') Home
@@ -10,7 +11,7 @@ html
         a(href='/cart') Cart
         if user.is_admin
           a(href='/admin') Admin
-        a(href='/profile') #{user.first_name}
+        a.profile-button(href='/profile') #{user.first_name}
         form.nav-form(method='POST', action='/logout')
           button.nav-logout(type='submit') Logout
       else

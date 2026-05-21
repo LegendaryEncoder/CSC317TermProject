@@ -18,7 +18,7 @@ block content
         div.field-group
           label Password
           input(type='password', name='password', required, autocomplete='current-password')
-        button(type='submit') Login
+        button.login-signup(type='submit') Login
 
     div#panel-signup.auth-panel(style='display:none')
       h2 Create an account
@@ -48,7 +48,7 @@ block content
           div.field-group
             label Confirm Password
             input(type='password', name='confirm_password', required, autocomplete='new-password')
-        button(type='submit') Create Account
+        button.login-signup(type='submit') Create Account
 
   script.
     function showTab(tab) {

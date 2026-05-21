@@ -92,10 +92,18 @@ initSqlJs().then(SQL => {
   // Seed swords
   const swordStmt = db.prepare('INSERT OR IGNORE INTO Swords (name, sword_type, ability, price, image_url) VALUES (?,?,?,?,?)');
   [
-    ['testblade',          'saber',     'Allows you to test any API.', 0.00,   null],
-    ['excalibur',          'longsword', 'Become King',                 999.99, null],
-    ['honjo masamune',     'katana',    'idk',                         499.99, null],
-    ['sword in the stone', 'longsword', 'Swing the stone',             499.99, null],
+    ['TESTBLADE', 'Saber', 'Allows you to test any API.', 0.00, "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSP0_pt5F0sdPDctonkMp6nJ_ZMZrXqaA-UhA&s"],
+    ['Excalibur', 'Longsword', 'Become King', 999.99, "https://m.media-amazon.com/images/I/61bf1f3H1uL.jpg"],
+    ['Honjo Masamune', 'Katana', 'idk', 499.99, "https://lh7-rt.googleusercontent.com/docsz/AD_4nXfRDTTFvMVGC-uSD9OweUyi2LLLn79WwOV3wVTl61fU0T3km0AVKgkaHh4PRTWqrqZLcG2IHPrj0FmcHQdODX2dvFX9DysMo0lkGS3R2w5T8Q2CmH3-BOQPxRJdllBnTcPyB8sf9g?key=sg5T4_04BkNnMYPWBv0Czogk"],
+    ['Sword in the Stone', 'Longsword', 'Swing the stone', 499.99, "https://www.psychologicalscience.org/redesign/wp-content/uploads/2023/02/MarApr23-Sword-from-Stone.png.jpg"],
+    ['Darkness', 'Katana', 'Conjures darkness from Darkness Island.', 249.99,   "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTGE7vOTOwHcIf_CBOPAg-Iw52BkBxGt4fWiQ&s"],
+    ['Invisiblade', 'Unknown', 'This sword is completely invisible, even to the wielder!', 0.99, "https://images.rawpixel.com/image_800/cHJpdmF0ZS9sci9pbWFnZXMvd2Vic2l0ZS8yMDIyLTA1L3BmLXMxMjQtYWstMjYxNV8yLmpwZw.jpg"],
+    ['Dark King Grûtmore\'s Edge of Annihilation', 'Greatsword', 'Splits apart realms with the souls of the slaughtered.', 999999.99, "https://media.craiyon.com/2025-10-10/dzNAy2LSQCOwcHEHvHXXfw.webp"],
+    ['the throngler', 'Dagger', 'the fewer words a magic sword\'s name has, the more dangerous it is', 9876543.21, "https://irongatearmory.com/wp-content/uploads/2014/08/p-7301-V422-Dragon-Dagger_01_LRG.jpg"],
+    ['Skywalker', 'Lightsaber', 'It\'s a literal lightsaber, does it really need any ability??', 599.99,  "https://upload.wikimedia.org/wikipedia/commons/d/d4/Lightsaber_Skywalker.png"],
+    ['Cybernite', 'Gladius', 'This sword can summon and shoot lasers at whatever it points at.', 649.99, "https://media.sketchfab.com/models/83e6b6f189b140a0b9eee6d0998c8451/thumbnails/c9b816091c844674bdc41262c451c230/35d0b72b19cc4c6eaf1bc36487bf26e0.jpeg"],
+    ['Necromancer\'s Fury', 'Claymore', 'The undead rises and obey those who wield this sword.', 599.99, "https://images.halloween.com/products/93235/1-1/inflatable-skull-sword-prop.jpg"],
+    ['Baguette', 'Baguette', 'It\'s really stale.', 1.99, "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTd8-f7kAprwW7mCfyAHysOW7NYZ1SEyTXjug&s"]
   ].forEach(s => swordStmt.run(s));
   swordStmt.free();
 
