@@ -44,6 +44,7 @@ function requireAdmin(req, res, next) {
 }
 
 // Startup 
+// Startup
 initSqlJs().then(SQL => {
   db.setDb(initDb(SQL));
   app.listen(PORT, () => console.log('Listening on http://localhost:' + PORT));

@@ -16,6 +16,7 @@ block content
           button.add-to-cart(data-sword=sword.name) + Add to Cart
         else
           a.add-to-cart-login(href='/login?next=/products') Login to add to cart
+    div.footer-buffer
 
   script.
     document.querySelectorAll('.add-to-cart').forEach(btn => {

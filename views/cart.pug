@@ -1,9 +1,10 @@
 extends layout
 
 block content
+  h1 Shopping Cart
   div.shopping-cart
-    h1 Shopping Cart
     if items.length === 0
+      img.empty-cart(src="https://cdn-icons-png.flaticon.com/512/11329/11329060.png")
       p.empty-cart Your cart is empty.
       a.button(href='/products') Browse Swords
     else
